@@ -1,9 +1,8 @@
 // Author: Bernardps
 // Project: UrbanGro Tokenizer_V1
 // Created: 12 April 2025
-// Last updated: 14 May 2025
+// Last updated: 16 May 2025
 
-// Libraries
 #include <DHT.h>
 #include <Wire.h>
 #include <Adafruit_VEML7700.h>
@@ -13,18 +12,7 @@
 #include <ThingSpeak.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-
-// WiFi credentials
-const char* ssid = "REDMI";
-const char* password = "PASSWORD";
-
-// ThingSpeak configuration
-unsigned long myChannelNumber = 2821073;
-const char* myWriteAPIKey = "SWOO6R2Z52ICIV52";
-WiFiClient tsClient;
-
-// MongoDB API endpoint
-const char* serverUrl = "https://4q4hmaf83d.execute-api.ap-south-1.amazonaws.com/testing";
+#include "secrets.h"  // <-- Include your credentials here
 
 // Sensor pins and types
 #define DHTPIN D5
@@ -56,8 +44,7 @@ void setup() {
   veml.setGain(VEML7700_GAIN_1_8);
   veml.setIntegrationTime(VEML7700_IT_25MS);
 
-  // Connect to WiFi
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -74,7 +61,7 @@ void setup() {
 
 void loop() {
   timeClient.update();
-  delay(2000); // Allow sensors to stabilize
+  delay(2000);
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected, skipping this cycle.");
@@ -94,7 +81,6 @@ void loop() {
   float luxUncorrected = rawLux * resolution;
   float correctedLux = luxUncorrected;
 
-  // Apply polynomial correction within valid range
   if (luxUncorrected < 20000) {
     correctedLux = 6.0135e-13 * pow(luxUncorrected, 4)
                  - 9.3924e-9  * pow(luxUncorrected, 3)
@@ -102,18 +88,15 @@ void loop() {
                  + 1.0023     * luxUncorrected;
   }
 
-  // Cap lux value
   if (correctedLux > 150000) {
     correctedLux = 150000;
   }
 
-  // Read UV intensity
   int uvLevel = analogRead(UVOUT);
   float outputVoltage = uvLevel * (3.3 / 1023.0);
   float uvIntensity = mapfloat(outputVoltage, 1.0, 2.8, 0.0, 15.0);
   if (uvIntensity < 0) uvIntensity = 0.0;
 
-  // Filter out invalid data
   if (humidity == 0 || temperature == 0 || correctedLux <= 0) {
     Serial.println("Detected invalid readings, skipping.");
     return;
@@ -125,17 +108,16 @@ void loop() {
   sendToThingSpeak(humidity, temperature, correctedLux, uvIntensity);
   sendToMongoAPI(humidity, temperature, correctedLux, uvIntensity);
 
-  delay(60000); // Wait 1 minute before next cycle
+  delay(60000);
 }
 
-// Upload to ThingSpeak
 void sendToThingSpeak(float h, float t, float lux, float uv) {
   ThingSpeak.setField(1, h);
   ThingSpeak.setField(2, t);
   ThingSpeak.setField(3, lux);
   ThingSpeak.setField(4, uv);
 
-  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  int x = ThingSpeak.writeFields(THINGSPEAK_CHANNEL, THINGSPEAK_API_KEY);
   if (x == 200) {
     Serial.println("ThingSpeak update successful.");
   } else {
@@ -144,13 +126,12 @@ void sendToThingSpeak(float h, float t, float lux, float uv) {
   }
 }
 
-// Send data to MongoDB via HTTPS
 void sendToMongoAPI(float h, float t, float lux, float uv) {
   WiFiClientSecure client;
   client.setInsecure();
 
   HTTPClient https;
-  if (https.begin(client, serverUrl)) {
+  if (https.begin(client, MONGODB_URL)) {
     https.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
@@ -177,7 +158,6 @@ void sendToMongoAPI(float h, float t, float lux, float uv) {
   }
 }
 
-// Get timestamp in ISO 8601 format
 String getISOTime() {
   unsigned long epoch = timeClient.getEpochTime();
   time_t rawtime = epoch;
@@ -189,7 +169,6 @@ String getISOTime() {
   return String(isoTime);
 }
 
-// Custom float mapping function
 float mapfloat(float x, float in_min, float in_max, float out_min, float out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
