@@ -69,12 +69,6 @@ void loop() {
   timeClient.update();
   delay(2000);
 
-  if (millis() - startMillis < 180000) {
-    Serial.println("Waiting 3 minutes after boot before sending data.");
-    delay(10000);
-    return;
-  }
-
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected, skipping this cycle.");
     return;
