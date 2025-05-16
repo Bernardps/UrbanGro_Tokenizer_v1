@@ -1,10 +1,8 @@
-#ifndef SECRETS_H
-#define SECRETS_H
+void loop() {
+  timeClient.update();
+  delay(2000);
 
-// WiFi Credentials
-const char* WIFI_SSID = "REDMI";
-const char* WIFI_PASSWORD = "PASSWORD";
-
-// ThingSpeak
-unsigned long THINGSPEAK_CHANNEL = 2821073;
-const char* THINGSPEAK_API_KEY = "SWOO6R2Z52IC
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected, skipping this cycle.");
+    return;
+  }
