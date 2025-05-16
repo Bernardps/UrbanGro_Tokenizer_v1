@@ -13,7 +13,7 @@
 #include <ThingSpeak.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-#include "secrets.h"  // credentials
+#include "secrets.h"  // Include your credentials here
 
 // Sensor pins and types
 #define DHTPIN D5
@@ -68,6 +68,7 @@ void setup() {
 void loop() {
   timeClient.update();
   delay(2000);
+  
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected, skipping this cycle.");
@@ -129,7 +130,7 @@ void sendToThingSpeak(float h, float t, float lux, float uv) {
   ThingSpeak.setField(3, lux);
   ThingSpeak.setField(4, uv);
 
-  int x = ThingSpeak.writeFields(THINGSPEAK_CHANNEL, THINGSPEAK_API_KEY);
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
   if (x == 200) {
     Serial.println("ThingSpeak update successful.");
   } else {
@@ -143,7 +144,7 @@ void sendToMongoAPI(float h, float t, float lux, float uv) {
   client.setInsecure();
 
   HTTPClient https;
-  if (https.begin(client, MONGODB_URL)) {
+  if (https.begin(client, serverUrl)) {
     https.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
