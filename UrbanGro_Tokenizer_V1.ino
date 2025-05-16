@@ -7,12 +7,13 @@
 #include <Wire.h>
 #include <Adafruit_VEML7700.h>
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <ESP8266HTTPClient.h>
 #include <ThingSpeak.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-#include "secrets.h"  // <-- Include your credentials here
+#include "secrets.h"  // credentials
 
 // Sensor pins and types
 #define DHTPIN D5
@@ -27,7 +28,11 @@ Adafruit_VEML7700 veml = Adafruit_VEML7700();
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
 
+// ThingSpeak client
+WiFiClient tsClient;
+
 String chipId;
+unsigned long startMillis;
 
 void setup() {
   Serial.begin(115200);
@@ -57,11 +62,18 @@ void setup() {
   timeClient.update();
 
   ThingSpeak.begin(tsClient);
+  startMillis = millis();
 }
 
 void loop() {
   timeClient.update();
   delay(2000);
+
+  if (millis() - startMillis < 180000) {
+    Serial.println("Waiting 3 minutes after boot before sending data.");
+    delay(10000);
+    return;
+  }
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected, skipping this cycle.");
@@ -70,6 +82,12 @@ void loop() {
 
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
+
+  if (isnan(humidity) || isnan(temperature)) {
+    delay(2000);
+    humidity = dht.readHumidity();
+    temperature = dht.readTemperature();
+  }
 
   if (isnan(humidity) || isnan(temperature)) {
     Serial.println("Failed to read from DHT sensor!");
@@ -97,18 +115,18 @@ void loop() {
   float uvIntensity = mapfloat(outputVoltage, 1.0, 2.8, 0.0, 15.0);
   if (uvIntensity < 0) uvIntensity = 0.0;
 
-  if (humidity == 0 || temperature == 0 || correctedLux <= 0) {
+  if (humidity <= 0 || temperature <= 0 || correctedLux <= 0) {
     Serial.println("Detected invalid readings, skipping.");
     return;
   }
 
-  Serial.printf("Humidity: %.2f %%\tTemperature: %.2f °C\tLux: %.0f lx\tUV: %.2f mW/cm^2\n",
-                humidity, temperature, correctedLux, uvIntensity);
+  Serial.printf("[%s] Humidity: %.2f %%\tTemperature: %.2f °C\tLux: %.0f lx\tUV: %.2f mW/cm^2\n",
+                getISOTime().c_str(), humidity, temperature, correctedLux, uvIntensity);
 
   sendToThingSpeak(humidity, temperature, correctedLux, uvIntensity);
   sendToMongoAPI(humidity, temperature, correctedLux, uvIntensity);
 
-  delay(60000);
+  delay(60000);  // wait 1 minute before next reading
 }
 
 void sendToThingSpeak(float h, float t, float lux, float uv) {
